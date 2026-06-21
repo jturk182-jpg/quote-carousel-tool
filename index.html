@@ -139,7 +139,6 @@ body { font-family: 'Space Mono', monospace; background: var(--bg-dark); color: 
 .cta-punch { font-size: 0.98em; font-weight: 600; line-height: 1.42; color: var(--cream); }
 .cta-punch .gold-em { color: var(--gold); }
 .cta-action { margin-top: 1.1em; font-family: 'Space Mono', monospace; font-size: 0.46em; letter-spacing: 0.04em; color: var(--gold); }
-.cta-handle { margin-top: 1.6em; font-family: 'Space Mono', monospace; font-size: 0.4em; letter-spacing: 0.1em; color: var(--cream-muted); }
 
 /* footer: tiny signature; brand only where flagged */
 .slide-foot { flex-shrink: 0; min-height: 1em; display: flex; justify-content: space-between; align-items: flex-end; font-family: 'Space Mono', monospace; font-size: 0.36em; letter-spacing: 0.08em; color: var(--cream-muted); }
@@ -557,7 +556,7 @@ const SLIDE_DEFS = [
 
 function footHTML(showBrand, series, number) {
   const left = showBrand ? `<span class="brand">Performance Neurology${number ? ' &middot; No. ' + esc(number) : ''}</span>` : '<span></span>';
-  return `<div class="slide-foot">${left}<span class="sig">J. Turknett</span></div>`;
+  return `<div class="slide-foot">${left}<span class="sig">${showBrand ? '@brainjojosh' : 'J. Turknett'}</span></div>`;
 }
 
 function buildSlideHTML(idx, s) {
@@ -580,7 +579,6 @@ function buildSlideHTML(idx, s) {
     body = `<div class="cta-body">
       ${s.ctaPunch ? `<div class="cta-punch">${renderRich(s.ctaPunch)}</div>` : ''}
       ${s.ctaAction ? `<div class="cta-action">${esc(s.ctaAction)} &rarr;</div>` : ''}
-      <div class="cta-handle">@brainjojosh</div>
     </div>`;
   } else if (def.type === 'brain') {
     const kind = s.sketch || 'none';
