@@ -1,0 +1,514 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Quote Carousel Tool</title>
+<link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,500;0,8..60,600;0,8..60,700;1,8..60,400;1,8..60,600&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg-dark: #1e1e1e;
+  --bg-panel: #2a2a2a;
+  --bg-input: #333;
+  --text-light: #e0e0e0;
+  --text-muted: #999;
+  --border: #444;
+  --accent: #c9a24b;
+  --accent-hover: #d8b25c;
+
+  --slide-bg: #1b1814;
+  --gold: #c9a24b;
+  --cream: #ece4d3;
+  --cream-muted: #8f877a;
+}
+
+body { font-family: 'Space Mono', monospace; background: var(--bg-dark); color: var(--text-light); height: 100vh; overflow: hidden; }
+.app-container { display: grid; grid-template-columns: 380px 1fr; height: 100vh; }
+
+.left-panel { background: var(--bg-panel); border-right: 1px solid var(--border); overflow-y: auto; display: flex; flex-direction: column; }
+.panel-header { padding: 16px 20px; border-bottom: 1px solid var(--border); font-size: 14px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; color: var(--accent); flex-shrink: 0; }
+.panel-note { padding: 8px 20px 0; font-size: 10px; color: var(--text-muted); line-height: 1.5; }
+
+.accordion-section { border-bottom: 1px solid var(--border); }
+.accordion-header { display: flex; justify-content: space-between; align-items: center; padding: 12px 20px; cursor: pointer; font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-light); user-select: none; transition: background 0.15s; }
+.accordion-header:hover { background: rgba(255,255,255,0.04); }
+.accordion-header .arrow { transition: transform 0.2s; font-size: 10px; color: var(--text-muted); }
+.accordion-header.active .arrow { transform: rotate(90deg); }
+.accordion-body { display: none; padding: 0 20px 16px; }
+.accordion-body.open { display: block; }
+
+.draft-item { padding: 10px 12px; margin-bottom: 6px; font-family: 'Source Serif 4', serif; font-size: 12px; line-height: 1.5; color: var(--text-light); background: var(--bg-input); border: 1px solid transparent; border-radius: 3px; cursor: pointer; transition: all 0.15s; }
+.draft-item:hover { border-color: var(--accent); }
+.draft-item .d-title { color: var(--accent); font-family: 'Space Mono', monospace; font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px; display:block; margin-bottom: 4px; }
+.draft-item .d-quote { color: var(--text-muted); font-style: italic; }
+
+.btn { padding: 8px 16px; font-family: 'Space Mono', monospace; font-size: 11px; font-weight: 700; border: none; border-radius: 3px; cursor: pointer; transition: all 0.15s; text-transform: uppercase; letter-spacing: 0.5px; }
+.btn-primary { background: var(--accent); color: #1b1814; }
+.btn-primary:hover { background: var(--accent-hover); }
+.btn-secondary { background: var(--bg-input); color: var(--text-light); border: 1px solid var(--border); }
+.btn-secondary:hover { border-color: var(--text-muted); }
+
+.json-textarea { width: 100%; min-height: 120px; padding: 8px 10px; font-family: 'Space Mono', monospace; font-size: 11px; background: var(--bg-input); border: 1px solid var(--border); color: var(--text-light); border-radius: 3px; resize: vertical; margin-bottom: 8px; }
+
+.right-panel { display: flex; flex-direction: column; overflow: hidden; }
+.editor-section { padding: 14px 24px; border-bottom: 1px solid var(--border); flex-shrink: 0; background: var(--bg-panel); max-height: 42vh; overflow-y: auto; }
+.editor-row { display: flex; gap: 12px; margin-bottom: 10px; align-items: flex-start; }
+.editor-field { flex: 1; }
+.editor-field.small { flex: 0 0 130px; }
+.editor-label { font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-muted); margin-bottom: 4px; }
+.editor-input, .editor-textarea-field, .editor-select { width: 100%; padding: 8px 10px; font-family: 'Source Serif 4', serif; font-size: 13px; background: var(--bg-input); border: 1px solid var(--border); color: var(--text-light); border-radius: 3px; outline: none; }
+.editor-select { font-family: 'Space Mono', monospace; font-size: 12px; }
+.editor-input:focus, .editor-textarea-field:focus, .editor-select:focus { border-color: var(--accent); }
+.editor-textarea-field { resize: vertical; min-height: 60px; font-size: 12px; line-height: 1.6; }
+.field-hint { font-size: 9px; color: var(--text-muted); margin-top: 2px; }
+
+.preview-section { flex: 1; overflow-y: auto; padding: 20px 24px; background: var(--bg-dark); }
+.preview-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 16px; }
+.export-bar { display: flex; gap: 10px; padding: 12px 24px; background: var(--bg-panel); border-top: 1px solid var(--border); flex-shrink: 0; }
+
+/* ====================== SLIDE STYLES ====================== */
+.slide-wrapper { aspect-ratio: 4/5; position: relative; cursor: pointer; border-radius: 4px; overflow: hidden; box-shadow: 0 2px 12px rgba(0,0,0,0.45); }
+.slide { width: 100%; height: 100%; background: var(--slide-bg); position: relative; display: flex; flex-direction: column; font-family: 'Source Serif 4', serif; color: var(--cream); }
+
+.slide-content { position: relative; z-index: 1; display: flex; flex-direction: column; height: 100%; padding: 10% 11%; }
+
+/* header: counter only, no brand, no frame */
+.slide-top { display: flex; justify-content: flex-end; align-items: center; flex-shrink: 0; min-height: 1em; }
+.slide-counter { font-family: 'Space Mono', monospace; font-size: 0.4em; letter-spacing: 0.12em; color: var(--cream-muted); }
+
+.slide-body { flex: 1; display: flex; flex-direction: column; justify-content: center; }
+
+/* HOOK / QUOTE — bare */
+.quote-mark { font-family: 'Source Serif 4', serif; font-size: 2.4em; line-height: 0.6; color: var(--gold); height: 0.5em; margin-bottom: 0.2em; }
+.quote-text { font-weight: 600; line-height: 1.34; color: var(--cream); letter-spacing: -0.005em; }
+.quote-attrib { margin-top: 0.95em; font-family: 'Space Mono', monospace; font-size: 0.42em; letter-spacing: 0.05em; color: var(--gold); }
+.quote-tension { margin-top: 0.75em; font-style: italic; font-size: 0.62em; line-height: 1.5; color: var(--cream-muted); }
+
+/* body slides — quiet label */
+.section-label { font-family: 'Source Serif 4', serif; font-style: italic; font-size: 0.6em; letter-spacing: 0.01em; color: var(--cream-muted); margin-bottom: 0.7em; }
+
+.body-text { font-size: 0.82em; line-height: 1.64; color: var(--cream); }
+.body-text .gold-em { color: var(--gold); }
+.body-text .bold-text { font-weight: 700; }
+
+/* brain sketch (optional diagram) */
+.brain-sketch { margin-top: 1.3em; width: 86%; align-self: center; }
+.brain-sketch svg { width: 100%; height: auto; display: block; overflow: visible; }
+
+/* hand annotation on the key phrase (content-agnostic, no per-post art).
+   Implemented as an SVG background-image so it survives html2canvas export. */
+.annot-underline, .annot-circle {
+  display: inline-block;       /* atomic box: phrase never splits across lines */
+  white-space: nowrap;
+  background-repeat: no-repeat;
+}
+.annot-underline {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 12' preserveAspectRatio='none'%3E%3Cpath d='M2,7 C18,3 34,10 52,6 C70,2 86,9 98,5' fill='none' stroke='%23c9a24b' stroke-width='2.4' stroke-linecap='round'/%3E%3C/svg%3E");
+  background-position: left bottom;
+  background-size: 100% 0.34em;
+  padding-bottom: 0.26em;
+}
+.annot-circle {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 120 52' preserveAspectRatio='none'%3E%3Cpath d='M14,28 C10,11 106,7 112,24 C116,41 22,50 6,32 C2,24 6,18 16,15' fill='none' stroke='%23c9a24b' stroke-width='2.2' stroke-linecap='round'/%3E%3C/svg%3E");
+  background-position: center;
+  background-size: 100% 100%;
+  padding: 0.02em 0.36em 0.12em;
+}
+
+/* CTA — plain text, no box; only slide with brand */
+.cta-body { flex: 1; display: flex; flex-direction: column; justify-content: center; }
+.cta-punch { font-size: 0.98em; font-weight: 600; line-height: 1.42; color: var(--cream); }
+.cta-punch .gold-em { color: var(--gold); }
+.cta-action { margin-top: 1.1em; font-family: 'Space Mono', monospace; font-size: 0.46em; letter-spacing: 0.04em; color: var(--gold); }
+
+/* footer: tiny signature; brand only where flagged */
+.slide-foot { flex-shrink: 0; min-height: 1em; display: flex; justify-content: space-between; align-items: flex-end; font-family: 'Space Mono', monospace; font-size: 0.36em; letter-spacing: 0.08em; color: var(--cream-muted); }
+.slide-foot .brand { color: var(--gold); text-transform: uppercase; letter-spacing: 0.16em; }
+.sig { font-family: 'Source Serif 4', serif; font-style: italic; font-size: 1.25em; letter-spacing: 0; color: var(--cream-muted); }
+
+.export-render { position: fixed; left: -9999px; top: 0; }
+.export-render .slide-wrapper { width: 1080px; height: 1350px; }
+
+.spinner { display: inline-block; width: 14px; height: 14px; border: 2px solid var(--text-muted); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.6s linear infinite; vertical-align: middle; margin-right: 6px; }
+@keyframes spin { to { transform: rotate(360deg); } }
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #555; border-radius: 3px; }
+.status-msg { font-size: 11px; color: var(--text-muted); padding: 8px 0; }
+.status-msg.error { color: #d8675a; }
+</style>
+</head>
+<body>
+
+<div class="app-container">
+  <div class="left-panel">
+    <div class="panel-header">Quote Carousel Tool</div>
+    <div class="panel-note">Quote-commentary carousels. The quote is the door; the commentary is the value. Bare quote slide, quiet labels, a hand-marked key phrase on the Brain slide, plain-text CTA. Brand mark only on the final slide.</div>
+
+    <div class="accordion-section">
+      <div class="accordion-header active" onclick="toggleAccordion(this)">
+        <span>Drafts</span><span class="arrow">&#9654;</span>
+      </div>
+      <div class="accordion-body open"><div id="draftList"></div></div>
+    </div>
+
+    <div class="accordion-section">
+      <div class="accordion-header" onclick="toggleAccordion(this)">
+        <span>Load JSON</span><span class="arrow">&#9654;</span>
+      </div>
+      <div class="accordion-body">
+        <textarea class="json-textarea" id="jsonInput" placeholder='Paste JSON here...'></textarea>
+        <button class="btn btn-secondary" onclick="loadJSONFromBox()">Load</button>
+        <div id="jsonStatus" class="status-msg"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="right-panel">
+    <div class="editor-section">
+      <div class="editor-row">
+        <div class="editor-field">
+          <div class="editor-label">Series label (final slide only)</div>
+          <input type="text" class="editor-input" id="edSeries" value="Quote Notes" oninput="updatePreview()">
+        </div>
+        <div class="editor-field small">
+          <div class="editor-label">No.</div>
+          <input type="text" class="editor-input" id="edNumber" value="01" oninput="updatePreview()">
+        </div>
+      </div>
+
+      <div class="editor-row">
+        <div class="editor-field">
+          <div class="editor-label">The Quote (slide 1) — punchiest fragment</div>
+          <textarea class="editor-textarea-field" id="edQuote" oninput="updatePreview()"></textarea>
+        </div>
+      </div>
+      <div class="editor-row">
+        <div class="editor-field">
+          <div class="editor-label">Attribution</div>
+          <input type="text" class="editor-input" id="edAttrib" oninput="updatePreview()">
+        </div>
+        <div class="editor-field">
+          <div class="editor-label">Hook tension line</div>
+          <input type="text" class="editor-input" id="edTension" oninput="updatePreview()">
+        </div>
+      </div>
+
+      <div class="editor-row">
+        <div class="editor-field">
+          <div class="editor-label">2 · The Situation <span class="field-hint">(*gold*, **bold**)</span></div>
+          <textarea class="editor-textarea-field" id="edSituation" oninput="updatePreview()"></textarea>
+        </div>
+        <div class="editor-field">
+          <div class="editor-label">3 · The Principle</div>
+          <textarea class="editor-textarea-field" id="edPrinciple" oninput="updatePreview()"></textarea>
+        </div>
+      </div>
+      <div class="editor-row">
+        <div class="editor-field">
+          <div class="editor-label">4 · The Brain</div>
+          <textarea class="editor-textarea-field" id="edBrain" oninput="updatePreview()"></textarea>
+          <div style="margin-top:6px;">
+            <div class="editor-label">Brain sketch</div>
+            <select class="editor-select" id="edSketch" onchange="updatePreview()">
+              <option value="none">none</option>
+              <optgroup label="Annotation (any topic, no art)">
+                <option value="underline">underline the key phrase</option>
+                <option value="circle">circle the key phrase</option>
+              </optgroup>
+              <optgroup label="Diagram (bespoke / library)">
+                <option value="block">blocked access (skill → noise → moment)</option>
+                <option value="loud">loud signal (drowns the skill)</option>
+              </optgroup>
+            </select>
+          </div>
+        </div>
+        <div class="editor-field">
+          <div class="editor-label">5 · The Reframe</div>
+          <textarea class="editor-textarea-field" id="edReframe" oninput="updatePreview()"></textarea>
+        </div>
+      </div>
+
+      <div class="editor-row">
+        <div class="editor-field">
+          <div class="editor-label">6 · CTA punch line</div>
+          <textarea class="editor-textarea-field" id="edCtaPunch" oninput="updatePreview()"></textarea>
+        </div>
+        <div class="editor-field">
+          <div class="editor-label">CTA action</div>
+          <input type="text" class="editor-input" id="edCtaAction" value="Take the quiz → Lose Yourself" oninput="updatePreview()">
+        </div>
+      </div>
+    </div>
+
+    <div class="preview-section" id="previewSection">
+      <div class="preview-grid" id="previewGrid"></div>
+    </div>
+
+    <div class="export-bar">
+      <button class="btn btn-primary" onclick="exportAll()">Download All PNGs</button>
+      <button class="btn btn-secondary" onclick="copyJSON()">Copy JSON</button>
+      <span id="exportStatus" class="status-msg" style="align-self:center;margin-left:8px;"></span>
+    </div>
+  </div>
+</div>
+
+<div class="export-render" id="exportRender"></div>
+
+<script>
+const DRAFTS = [
+  {
+    title: "Nelson Dellis — Stress Training / Access",
+    series: "Quote Notes", number: "01",
+    quote: "Instead of my quiet office, I'd go out on the train and do it in public, with people staring at me.",
+    attribution: "Nelson Dellis, 6× USA Memory Champion",
+    tension: "He could already memorize a shuffled deck in seconds. So why make practice harder?",
+    situation: "Nelson kept winning. Then he started losing — and not because his memory failed. *There've been competitions where I won, and ones where I lost based on the stress.* The skill was there. The stress was taking it away.",
+    principle: "He didn't need a better memory. He needed to reach the memory he already had — while his heart pounded and strangers stared. So he stopped practicing in calm, and started *practicing the pressure*.",
+    brain: "Pressure doesn't erase a skill. It *blocks your access* to it. Under stress, the brain's self-monitoring gets loud and grabs the very attention the skill needs.",
+    sketch: "underline",
+    reframe: "This is why practicing alone in your room will never make you ready for the stage. The room has none of the things that make the stage hard. *You have to practice the pressure, not just the part.*",
+    ctaPunch: "The skill isn't the problem. *Access* is.",
+    ctaAction: "Take the quiz → Lose Yourself"
+  }
+];
+
+function buildDraftList() {
+  const el = document.getElementById('draftList');
+  el.innerHTML = '';
+  DRAFTS.forEach(d => {
+    const div = document.createElement('div');
+    div.className = 'draft-item';
+    div.innerHTML = `<span class="d-title">${esc(d.title)}</span><span class="d-quote">"${esc((d.quote||'').substring(0,90))}${d.quote && d.quote.length>90?'…':''}"</span>`;
+    div.onclick = () => loadData(d);
+    el.appendChild(div);
+  });
+}
+
+function toggleAccordion(header) {
+  const wasActive = header.classList.contains('active');
+  document.querySelectorAll('.accordion-header').forEach(h => { h.classList.remove('active'); h.nextElementSibling.classList.remove('open'); });
+  if (!wasActive) { header.classList.add('active'); header.nextElementSibling.classList.add('open'); }
+}
+
+function loadData(d) {
+  const set = (id, v) => { if (v !== undefined && v !== null) document.getElementById(id).value = v; };
+  set('edSeries', d.series || 'Quote Notes');
+  set('edNumber', d.number || '01');
+  set('edQuote', d.quote || '');
+  set('edAttrib', d.attribution || '');
+  set('edTension', d.tension || '');
+  set('edSituation', d.situation || '');
+  set('edPrinciple', d.principle || '');
+  set('edBrain', d.brain || '');
+  set('edSketch', d.sketch || 'none');
+  set('edReframe', d.reframe || '');
+  set('edCtaPunch', d.ctaPunch || '');
+  set('edCtaAction', d.ctaAction || 'Take the quiz → Lose Yourself');
+  updatePreview();
+}
+
+function getEditorState() {
+  return {
+    series: document.getElementById('edSeries').value,
+    number: document.getElementById('edNumber').value,
+    quote: document.getElementById('edQuote').value,
+    attribution: document.getElementById('edAttrib').value,
+    tension: document.getElementById('edTension').value,
+    situation: document.getElementById('edSituation').value,
+    principle: document.getElementById('edPrinciple').value,
+    brain: document.getElementById('edBrain').value,
+    sketch: document.getElementById('edSketch').value,
+    reframe: document.getElementById('edReframe').value,
+    ctaPunch: document.getElementById('edCtaPunch').value,
+    ctaAction: document.getElementById('edCtaAction').value
+  };
+}
+
+function loadJSONFromBox() {
+  const status = document.getElementById('jsonStatus');
+  try { loadData(JSON.parse(document.getElementById('jsonInput').value.trim())); status.textContent = 'Loaded.'; status.className = 'status-msg'; }
+  catch (e) { status.textContent = 'Invalid JSON: ' + e.message; status.className = 'status-msg error'; }
+}
+
+function esc(str) { const d = document.createElement('div'); d.textContent = str == null ? '' : str; return d.innerHTML; }
+function renderRich(text) {
+  if (!text) return '';
+  let html = esc(text).replace(/\n/g, '<br>');
+  html = html.replace(/\*\*(.+?)\*\*/g, '<span class="bold-text">$1</span>');
+  html = html.replace(/\*(.+?)\*/g, '<span class="gold-em">$1</span>');
+  return html;
+}
+function quoteFontEm(text) {
+  const n = (text || '').length;
+  if (n < 60) return 1.5; if (n < 110) return 1.28; if (n < 170) return 1.1; if (n < 240) return 0.96; return 0.84;
+}
+
+// hand annotation on the first emphasized phrase — content-agnostic, stretches to any phrase.
+// Adds a background-image class to the gold-em span (html2canvas-safe).
+function annotateFirstGold(html, kind) {
+  if (kind !== 'underline' && kind !== 'circle') return html;
+  return html.replace(/<span class="gold-em">(.*?)<\/span>/, (m, inner) =>
+    `<span class="gold-em annot-${kind}">${inner}</span>`);
+}
+
+// hand-drawn sketch motifs (deliberately imperfect strokes)
+function sketchSVG(kind) {
+  const stroke = '#ece4d3', gold = '#c9a24b', muted = '#8f877a';
+  if (kind === 'block') {
+    return `<svg viewBox="0 0 440 150">
+      <g fill="none" stroke="${stroke}" stroke-width="2.4" stroke-linecap="round">
+        <path d="M44,92 C92,86 132,99 168,93"/>
+        <path d="M276,93 C320,88 372,100 398,90"/>
+      </g>
+      <circle cx="44" cy="92" r="6.5" fill="${stroke}"/>
+      <g fill="none" stroke="${stroke}" stroke-width="2.4"><circle cx="398" cy="90" r="9"/></g>
+      <path d="M186,58 L196,112 207,52 218,116 230,55 241,110 252,60" fill="none" stroke="${gold}" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+      <g stroke="${gold}" stroke-width="2.6" stroke-linecap="round"><path d="M210,86 L236,104"/><path d="M236,86 L210,104"/></g>
+      <text x="44" y="124" fill="${muted}" font-family="'Space Mono',monospace" font-size="15" text-anchor="middle">the skill</text>
+      <text x="398" y="124" fill="${muted}" font-family="'Space Mono',monospace" font-size="15" text-anchor="middle">the moment</text>
+      <text x="219" y="38" fill="${gold}" font-family="'Space Mono',monospace" font-size="15" text-anchor="middle">self-monitoring</text>
+    </svg>`;
+  }
+  if (kind === 'loud') {
+    return `<svg viewBox="0 0 440 150">
+      <path d="M30,110 C90,108 150,112 410,110" fill="none" stroke="${muted}" stroke-width="2" stroke-linecap="round"/>
+      <text x="30" y="132" fill="${muted}" font-family="'Space Mono',monospace" font-size="15">the skill, still there</text>
+      <path d="M30,70 L70,30 96,104 124,24 152,108 182,28 210,104 240,30 268,106 298,26 326,102 356,34 388,98 410,60"
+        fill="none" stroke="${gold}" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+      <text x="410" y="20" fill="${gold}" font-family="'Space Mono',monospace" font-size="15" text-anchor="end">the noise</text>
+    </svg>`;
+  }
+  return '';
+}
+
+const SLIDE_DEFS = [
+  { type: 'quote' },
+  { type: 'body', label: 'On the situation', key: 'situation' },
+  { type: 'body', label: 'What it reveals', key: 'principle' },
+  { type: 'brain', label: 'In the brain', key: 'brain' },
+  { type: 'body', label: 'What it means for you', key: 'reframe' },
+  { type: 'cta' }
+];
+
+function footHTML(showBrand, series, number) {
+  const left = showBrand ? `<span class="brand">Performance Neurology${number ? ' &middot; No. ' + esc(number) : ''}</span>` : '<span></span>';
+  return `<div class="slide-foot">${left}<span class="sig">J. Turknett</span></div>`;
+}
+
+function buildSlideHTML(idx, s) {
+  const def = SLIDE_DEFS[idx];
+  const total = SLIDE_DEFS.length;
+  const counter = idx === 0 ? '' : `<div class="slide-counter">${idx + 1} / ${total}</div>`;
+  const isQuote = def.type === 'quote';
+  const isCta = def.type === 'cta';
+
+  let body = '';
+  if (isQuote) {
+    const fs = quoteFontEm(s.quote);
+    body = `<div class="slide-body">
+      <div class="quote-mark">&ldquo;</div>
+      <div class="quote-text" style="font-size:${fs}em;">${renderRich(s.quote)}</div>
+      ${s.attribution ? `<div class="quote-attrib">&mdash; ${esc(s.attribution)}</div>` : ''}
+      ${s.tension ? `<div class="quote-tension">${renderRich(s.tension)}</div>` : ''}
+    </div>`;
+  } else if (isCta) {
+    body = `<div class="cta-body">
+      ${s.ctaPunch ? `<div class="cta-punch">${renderRich(s.ctaPunch)}</div>` : ''}
+      ${s.ctaAction ? `<div class="cta-action">${esc(s.ctaAction)} &rarr;</div>` : ''}
+    </div>`;
+  } else if (def.type === 'brain') {
+    const kind = s.sketch || 'none';
+    const isDiagram = (kind === 'block' || kind === 'loud');
+    const bodyHTML = isDiagram ? renderRich(s[def.key]) : annotateFirstGold(renderRich(s[def.key]), kind);
+    const sk = isDiagram ? `<div class="brain-sketch">${sketchSVG(kind)}</div>` : '';
+    body = `<div class="slide-body">
+      <div class="section-label">${esc(def.label)}</div>
+      <div class="body-text">${bodyHTML}</div>
+      ${sk}
+    </div>`;
+  } else {
+    body = `<div class="slide-body">
+      <div class="section-label">${esc(def.label)}</div>
+      <div class="body-text">${renderRich(s[def.key])}</div>
+    </div>`;
+  }
+
+  // slide 1 = totally bare (no top counter, no footer). Brand only on CTA.
+  const top = isQuote ? '' : `<div class="slide-top">${counter}</div>`;
+  const foot = isQuote ? '' : footHTML(isCta, s.series, s.number);
+
+  return `<div class="slide-wrapper" data-slide="${idx}">
+    <div class="slide">
+      <div class="slide-content">
+        ${top}
+        ${body}
+        ${foot}
+      </div>
+    </div>
+  </div>`;
+}
+
+function updatePreview() {
+  const s = getEditorState();
+  const grid = document.getElementById('previewGrid');
+  let html = '';
+  for (let i = 0; i < SLIDE_DEFS.length; i++) html += buildSlideHTML(i, s);
+  grid.innerHTML = html;
+  grid.querySelectorAll('.slide-wrapper').forEach(w => {
+    const slide = w.querySelector('.slide');
+    if (slide) slide.style.fontSize = (w.clientWidth / 20.77) + 'px';
+  });
+}
+
+async function exportAll() {
+  const statusEl = document.getElementById('exportStatus');
+  statusEl.innerHTML = '<span class="spinner"></span> Rendering...';
+  const s = getEditorState();
+  const renderContainer = document.getElementById('exportRender');
+  const names = ['quote', 'situation', 'principle', 'brain', 'reframe', 'cta'];
+  const blobs = [];
+  const slug = (s.series || 'quote').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') + (s.number ? '-' + s.number : '') + '-annotated';
+  await document.fonts.ready;
+  for (let i = 0; i < SLIDE_DEFS.length; i++) {
+    statusEl.innerHTML = `<span class="spinner"></span> Rendering slide ${i + 1} of ${SLIDE_DEFS.length}...`;
+    renderContainer.innerHTML = buildSlideHTML(i, s);
+    const wrapper = renderContainer.querySelector('.slide-wrapper');
+    wrapper.style.cssText = 'width:1080px;height:1350px;aspect-ratio:auto;border-radius:0;overflow:hidden;position:relative;box-shadow:none;cursor:default;';
+    wrapper.querySelector('.slide').style.fontSize = '52px';
+    await new Promise(r => setTimeout(r, 180));
+    try {
+      const canvas = await html2canvas(wrapper, { width: 1080, height: 1350, scale: 1, useCORS: true, backgroundColor: '#1b1814', logging: false, allowTaint: true });
+      const blob = await new Promise(res => canvas.toBlob(res, 'image/png'));
+      blobs.push({ blob, filename: `${slug}-${String(i + 1).padStart(2, '0')}-${names[i]}.png` });
+    } catch (e) {
+      statusEl.textContent = 'Export error on slide ' + (i + 1) + ': ' + e.message;
+      statusEl.className = 'status-msg error'; renderContainer.innerHTML = ''; return;
+    }
+  }
+  renderContainer.innerHTML = '';
+  statusEl.innerHTML = '<span class="spinner"></span> Packaging zip...';
+  const zip = new JSZip();
+  for (const { blob, filename } of blobs) zip.file(filename, blob);
+  const zipBlob = await zip.generateAsync({ type: 'blob' });
+  const url = URL.createObjectURL(zipBlob);
+  const link = document.createElement('a'); link.download = `${slug}.zip`; link.href = url;
+  document.body.appendChild(link); link.click(); document.body.removeChild(link); URL.revokeObjectURL(url);
+  statusEl.textContent = `${blobs.length} slides exported.`; statusEl.className = 'status-msg';
+}
+
+function copyJSON() {
+  const s = getEditorState();
+  navigator.clipboard.writeText(JSON.stringify(s, null, 2)).then(() => { document.getElementById('exportStatus').textContent = 'JSON copied.'; })
+  .catch(() => { const ta = document.createElement('textarea'); ta.value = JSON.stringify(s, null, 2); document.body.appendChild(ta); ta.select(); document.execCommand('copy'); document.body.removeChild(ta); document.getElementById('exportStatus').textContent = 'JSON copied.'; });
+}
+
+buildDraftList();
+loadData(DRAFTS[0]);
+</script>
+</body>
+</html>
