@@ -45,6 +45,21 @@ body { font-family: 'Space Mono', monospace; background: var(--bg-dark); color: 
 .draft-item:hover { border-color: var(--accent); }
 .draft-item .d-title { color: var(--accent); font-family: 'Space Mono', monospace; font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px; display:block; margin-bottom: 4px; }
 .draft-item .d-quote { color: var(--text-muted); font-style: italic; }
+.draft-item { display: flex; align-items: flex-start; gap: 8px; }
+.draft-item .d-main { flex: 1; min-width: 0; cursor: pointer; }
+.draft-item .d-del { flex-shrink: 0; background: transparent; border: none; color: var(--text-muted); font-size: 16px; line-height: 1; cursor: pointer; padding: 2px 5px; border-radius: 3px; }
+.draft-item .d-del:hover { background: rgba(216,103,90,0.15); color: #d8675a; }
+.draft-empty { font-size: 11px; color: var(--text-muted); line-height: 1.5; }
+.drafts-bar { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
+.mini-btn { padding: 5px 9px; font-family: 'Space Mono', monospace; font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; border: 1px solid var(--border); background: var(--bg-input); color: var(--text-light); border-radius: 3px; cursor: pointer; }
+.mini-btn:hover { border-color: var(--accent); color: var(--accent); }
+.mini-btn.solid { background: var(--accent); color: #1b1814; border-color: var(--accent); }
+.mini-btn.link { border: none; background: transparent; color: var(--text-muted); text-decoration: underline; }
+.sync-status { font-size: 9px; color: var(--text-muted); font-style: italic; margin-left: auto; }
+.token-input { width: 100%; margin-top: 8px; padding: 8px 10px; background: var(--bg-input); border: 1px solid var(--border); border-radius: 3px; color: var(--text-light); font-family: 'Space Mono', monospace; font-size: 11px; }
+.token-input:focus { outline: none; border-color: var(--accent); }
+.sync-hint { font-size: 9px; color: var(--text-muted); line-height: 1.5; margin-top: 6px; }
+.sync-hint a { color: var(--accent); }
 
 .btn { padding: 8px 16px; font-family: 'Space Mono', monospace; font-size: 11px; font-weight: 700; border: none; border-radius: 3px; cursor: pointer; transition: all 0.15s; text-transform: uppercase; letter-spacing: 0.5px; }
 .btn-primary { background: var(--accent); color: #1b1814; }
@@ -153,7 +168,25 @@ body { font-family: 'Space Mono', monospace; background: var(--bg-dark); color: 
       <div class="accordion-header active" onclick="toggleAccordion(this)">
         <span>Drafts</span><span class="arrow">&#9654;</span>
       </div>
-      <div class="accordion-body open"><div id="draftList"></div></div>
+      <div class="accordion-body open">
+        <div id="draftList"></div>
+        <div class="drafts-bar">
+          <button class="mini-btn" onclick="exportDrafts()">Export</button>
+          <button class="mini-btn" onclick="document.getElementById('import-file').click()">Import</button>
+          <input type="file" id="import-file" accept=".json" style="display:none">
+          <button class="mini-btn" id="pull-btn" onclick="manualPull()" style="display:none">Refresh</button>
+          <span class="sync-status" id="sync-status">Local only</span>
+        </div>
+        <div style="margin-top:6px;"><button class="mini-btn link" onclick="toggleSync()">Sync settings</button></div>
+        <div id="sync-panel" style="display:none">
+          <input type="password" id="gh-token" class="token-input" placeholder="GitHub token (gist scope)">
+          <div class="sync-hint">Syncs your library to a private gist you can open from any computer. Token stored in this browser only. <a href="https://github.com/settings/tokens/new?scopes=gist&description=IPN%20Quote%20Carousel%20Drafts" target="_blank" rel="noopener">Create a token →</a></div>
+          <div style="display:flex;gap:6px;margin-top:8px;">
+            <button class="mini-btn solid" onclick="connectGitHub()">Connect</button>
+            <button class="mini-btn" id="disconnect-btn" onclick="disconnectGitHub()" style="display:none">Disconnect</button>
+          </div>
+        </div>
+      </div>
     </div>
 
     <div class="accordion-section">
@@ -251,6 +284,7 @@ body { font-family: 'Space Mono', monospace; background: var(--bg-dark); color: 
 
     <div class="export-bar">
       <button class="btn btn-primary" onclick="exportAll()">Download All PNGs</button>
+      <button class="btn btn-secondary" id="btnSaveDraft" onclick="saveCurrentDraft()">Save Draft</button>
       <button class="btn btn-secondary" onclick="copyJSON()">Copy JSON</button>
       <span id="exportStatus" class="status-msg" style="align-self:center;margin-left:8px;"></span>
     </div>
@@ -260,6 +294,9 @@ body { font-family: 'Space Mono', monospace; background: var(--bg-dark); color: 
 <div class="export-render" id="exportRender"></div>
 
 <script>
+let currentDraftId = null;
+const DRAFTS_KEY = 'ipn_quote_drafts';
+const GH_TOKEN_KEY = 'ipn_gh_token', GIST_ID_KEY = 'ipn_quote_gist_id', GIST_FILENAME = 'ipn-quote-drafts.json';
 const DRAFTS = [
   {
     title: "Nelson Dellis — Stress Training / Access",
@@ -291,17 +328,125 @@ const DRAFTS = [
   }
 ];
 
-function buildDraftList() {
-  const el = document.getElementById('draftList');
+function buildDraftShelf() {
+  const list = getDrafts(), el = document.getElementById('draftList');
+  if (!el) return;
   el.innerHTML = '';
-  DRAFTS.forEach(d => {
+  if (!list.length) { el.innerHTML = '<div class="draft-empty">No saved drafts yet. Build a carousel, then click Save Draft.</div>'; return; }
+  list.slice().sort((a,b)=>b.savedAt-a.savedAt).forEach(d => {
+    const q = (d.data && d.data.quote ? d.data.quote : '').replace(/\*/g,'');
     const div = document.createElement('div');
     div.className = 'draft-item';
-    div.innerHTML = `<span class="d-title">${esc(d.title)}</span><span class="d-quote">"${esc((d.quote||'').substring(0,90))}${d.quote && d.quote.length>90?'…':''}"</span>`;
-    div.onclick = () => loadData(d);
+    div.innerHTML = '<div class="d-main"><span class="d-title"></span><span class="d-quote"></span></div><button class="d-del" title="Delete draft">×</button>';
+    div.querySelector('.d-title').textContent = d.name || '(untitled)';
+    div.querySelector('.d-quote').textContent = '"' + q.substring(0,90) + (q.length>90?'…':'') + '"';
+    div.querySelector('.d-main').onclick = () => openDraft(d.id);
+    div.querySelector('.d-del').onclick = e => { e.stopPropagation(); deleteDraft(d.id); };
     el.appendChild(div);
   });
 }
+
+// ===== Saved-draft library: local cache + GitHub gist sync =====
+function getDrafts(){try{return JSON.parse(localStorage.getItem(DRAFTS_KEY))||[];}catch(e){return[];}}
+function putDrafts(arr){localStorage.setItem(DRAFTS_KEY,JSON.stringify(arr||[]));}
+function clone(o){return JSON.parse(JSON.stringify(o));}
+function mergeById(a,b){const m=new Map();[...(a||[]),...(b||[])].forEach(d=>{if(!d||!d.id)return;const ex=m.get(d.id);if(!ex||(d.savedAt||0)>(ex.savedAt||0))m.set(d.id,d);});return [...m.values()];}
+function seedIfFirstRun(){
+  if(localStorage.getItem('ipn_quote_seeded'))return;
+  if(getDrafts().length===0){
+    putDrafts(DRAFTS.map((d,i)=>{const c=clone(d);delete c.title;return {id:'seed_'+i,name:d.title,savedAt:Date.now()-(DRAFTS.length-i)*1000,data:c};}));
+  }
+  localStorage.setItem('ipn_quote_seeded','1');
+}
+function openDraft(id){const d=getDrafts().find(x=>x.id===id);if(!d)return;currentDraftId=id;loadData(d.data);}
+async function deleteDraft(id){
+  if(!confirm('Delete this draft? This cannot be undone.'))return;
+  const list=(await currentList()).filter(x=>x.id!==id);
+  putDrafts(list);if(currentDraftId===id)currentDraftId=null;buildDraftShelf();
+  await pushDrafts(list);
+}
+async function saveCurrentDraft(){
+  const state=getEditorState();
+  const list=await currentList();
+  if(currentDraftId){
+    const idx=list.findIndex(x=>x.id===currentDraftId);
+    if(idx>=0){list[idx].data=state;list[idx].savedAt=Date.now();putDrafts(list);buildDraftShelf();flashSaved('Updated');await pushDrafts(list);return;}
+  }
+  const def=(state.attribution||state.quote||'').replace(/\*/g,'').trim().substring(0,60);
+  const name=prompt('Name this draft:',def);
+  if(name===null)return;
+  const id='q'+Date.now()+'_'+Math.floor(Math.random()*1000);
+  list.push({id,name:(name.trim()||def||'Untitled'),savedAt:Date.now(),data:state});
+  putDrafts(list);currentDraftId=id;buildDraftShelf();flashSaved('Saved');
+  await pushDrafts(list);
+}
+function flashSaved(msg){const b=document.getElementById('btnSaveDraft');if(!b)return;b.textContent=msg+' ✓';setTimeout(()=>{b.textContent='Save Draft';},1400);}
+
+// Export / Import (portable .json backup)
+function exportDrafts(){
+  const blob=new Blob([JSON.stringify(getDrafts(),null,2)],{type:'application/json'});
+  const a=document.createElement('a');a.download='quote-carousel-drafts.json';a.href=URL.createObjectURL(blob);
+  document.body.appendChild(a);a.click();document.body.removeChild(a);URL.revokeObjectURL(a.href);
+}
+function importDraftsFile(file){
+  const r=new FileReader();
+  r.onload=async()=>{try{
+    const incoming=JSON.parse(r.result);
+    if(!Array.isArray(incoming))throw new Error('That file is not a drafts export.');
+    const merged=mergeById(getDrafts(),incoming);putDrafts(merged);buildDraftShelf();
+    if(isConnected())await pushDrafts(merged);else setSyncStatus('Imported · '+merged.length+' local draft(s)');
+  }catch(e){alert('Import failed: '+e.message);}};
+  r.readAsText(file);
+}
+
+// GitHub gist sync (separate gist from the Study Breakdown tool)
+function getToken(){return localStorage.getItem(GH_TOKEN_KEY)||'';}
+function isConnected(){return !!getToken();}
+function setSyncStatus(m){const el=document.getElementById('sync-status');if(el)el.textContent=m;}
+function refreshSyncUI(){const conn=isConnected();const pb=document.getElementById('pull-btn'),db=document.getElementById('disconnect-btn');if(pb)pb.style.display=conn?'inline-block':'none';if(db)db.style.display=conn?'inline-block':'none';}
+function toggleSync(){const p=document.getElementById('sync-panel');p.style.display=p.style.display==='none'?'block':'none';}
+function ghFetch(url,opts){opts=opts||{};const h={'Authorization':'Bearer '+getToken(),'Accept':'application/vnd.github+json','X-GitHub-Api-Version':'2022-11-28'};if(opts.body)h['Content-Type']='application/json';return fetch(url,Object.assign({},opts,{headers:h}));}
+async function ensureGistId(){
+  let id=localStorage.getItem(GIST_ID_KEY);if(id)return id;
+  const res=await ghFetch('https://api.github.com/gists?per_page=100');
+  if(!res.ok)throw new Error('GitHub auth failed ('+res.status+'). Check the token.');
+  const list=await res.json();
+  const found=Array.isArray(list)&&list.find(g=>g.files&&g.files[GIST_FILENAME]);
+  if(found){id=found.id;}
+  else{const cr=await ghFetch('https://api.github.com/gists',{method:'POST',body:JSON.stringify({description:'IPN Quote Carousel drafts',public:false,files:{[GIST_FILENAME]:{content:'[]'}}})});if(!cr.ok)throw new Error('Could not create gist ('+cr.status+').');id=(await cr.json()).id;}
+  localStorage.setItem(GIST_ID_KEY,id);return id;
+}
+async function pullArrayFromGist(){
+  if(!isConnected())throw new Error('Not connected.');
+  const id=await ensureGistId();
+  const res=await ghFetch('https://api.github.com/gists/'+id);
+  if(!res.ok)throw new Error('Could not read gist ('+res.status+').');
+  const g=await res.json();const f=g.files&&g.files[GIST_FILENAME];
+  let arr=[];if(f&&f.content){try{arr=JSON.parse(f.content)||[];}catch(e){arr=[];}}
+  return Array.isArray(arr)?arr:[];
+}
+async function currentList(){
+  if(isConnected()){try{const arr=await pullArrayFromGist();putDrafts(arr);return arr;}catch(e){setSyncStatus('Offline — using local copy');return getDrafts();}}
+  return getDrafts();
+}
+async function pushDrafts(arr){
+  if(!isConnected())return;
+  try{setSyncStatus('Syncing…');const id=await ensureGistId();const res=await ghFetch('https://api.github.com/gists/'+id,{method:'PATCH',body:JSON.stringify({files:{[GIST_FILENAME]:{content:JSON.stringify(arr,null,2)}}})});if(!res.ok)throw new Error('status '+res.status);setSyncStatus('Synced ✓ · '+arr.length+' draft(s)');}
+  catch(e){setSyncStatus('Offline — saved locally');}
+}
+async function manualPull(){
+  if(!isConnected())return;setSyncStatus('Syncing…');
+  try{const arr=await pullArrayFromGist();putDrafts(arr);buildDraftShelf();setSyncStatus('Synced ✓ · '+arr.length+' draft(s)');}
+  catch(e){setSyncStatus('Pull failed: '+e.message);}
+}
+async function connectGitHub(){
+  const t=document.getElementById('gh-token').value.trim();
+  if(!t){setSyncStatus('Enter a token first');return;}
+  localStorage.setItem(GH_TOKEN_KEY,t);setSyncStatus('Connecting…');
+  try{const remote=await pullArrayFromGist();const merged=mergeById(getDrafts(),remote);putDrafts(merged);buildDraftShelf();await pushDrafts(merged);document.getElementById('gh-token').value='';refreshSyncUI();setSyncStatus('Synced ✓ · '+merged.length+' draft(s)');}
+  catch(e){localStorage.removeItem(GH_TOKEN_KEY);refreshSyncUI();setSyncStatus('Connection failed: '+e.message);}
+}
+function disconnectGitHub(){localStorage.removeItem(GH_TOKEN_KEY);localStorage.removeItem(GIST_ID_KEY);refreshSyncUI();setSyncStatus('Local only');}
 
 function toggleAccordion(header) {
   const wasActive = header.classList.contains('active');
@@ -345,7 +490,7 @@ function getEditorState() {
 
 function loadJSONFromBox() {
   const status = document.getElementById('jsonStatus');
-  try { loadData(JSON.parse(document.getElementById('jsonInput').value.trim())); status.textContent = 'Loaded.'; status.className = 'status-msg'; }
+  try { currentDraftId = null; loadData(JSON.parse(document.getElementById('jsonInput').value.trim())); status.textContent = 'Loaded.'; status.className = 'status-msg'; }
   catch (e) { status.textContent = 'Invalid JSON: ' + e.message; status.className = 'status-msg error'; }
 }
 
@@ -521,8 +666,13 @@ function copyJSON() {
   .catch(() => { const ta = document.createElement('textarea'); ta.value = JSON.stringify(s, null, 2); document.body.appendChild(ta); ta.select(); document.execCommand('copy'); document.body.removeChild(ta); document.getElementById('exportStatus').textContent = 'JSON copied.'; });
 }
 
-buildDraftList();
-loadData(DRAFTS[0]);
+seedIfFirstRun();
+buildDraftShelf();
+refreshSyncUI();
+if (isConnected()) { manualPull(); } else { setSyncStatus('Local only'); }
+document.getElementById('import-file').addEventListener('change', e => { const f = e.target.files && e.target.files[0]; if (f) importDraftsFile(f); e.target.value = ''; });
+const _first = getDrafts().slice().sort((a,b)=>b.savedAt-a.savedAt)[0];
+if (_first) { openDraft(_first.id); } else { loadData(DRAFTS[0]); }
 </script>
 </body>
 </html>
