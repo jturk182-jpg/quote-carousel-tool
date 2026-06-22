@@ -50,6 +50,21 @@ body { font-family: 'Space Mono', monospace; background: var(--bg-dark); color: 
 .draft-item .d-del { flex-shrink: 0; background: transparent; border: none; color: var(--text-muted); font-size: 16px; line-height: 1; cursor: pointer; padding: 2px 5px; border-radius: 3px; }
 .draft-item .d-del:hover { background: rgba(216,103,90,0.15); color: #d8675a; }
 .draft-empty { font-size: 11px; color: var(--text-muted); line-height: 1.5; }
+.shelf-toggle { display: flex; gap: 4px; margin-bottom: 10px; }
+.shelf-toggle button { padding: 5px 12px; border: 1px solid var(--border); background: var(--bg-input); color: var(--text-muted); font-family: 'Space Mono', monospace; font-size: 9px; font-weight: 700; letter-spacing: 0.5px; text-transform: uppercase; border-radius: 3px; cursor: pointer; }
+.shelf-toggle button.active { background: var(--accent); color: #1b1814; border-color: var(--accent); }
+.draft-item .d-post { flex-shrink: 0; padding: 4px 8px; border: 1px solid var(--border); background: var(--bg-input); color: var(--text-light); font-family: 'Space Mono', monospace; font-size: 8px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; border-radius: 3px; cursor: pointer; }
+.draft-item .d-post:hover { border-color: var(--accent); color: var(--accent); }
+.draft-item.archived { flex-direction: column; align-items: stretch; gap: 8px; }
+.draft-item.archived .d-row { display: flex; align-items: flex-start; gap: 8px; }
+.draft-item.archived .d-main { flex: 1; min-width: 0; }
+.metrics { display: flex; align-items: flex-end; gap: 8px; flex-wrap: wrap; }
+.metrics label { display: flex; flex-direction: column; font-size: 8px; font-weight: 700; letter-spacing: 0.5px; text-transform: uppercase; color: var(--text-muted); gap: 3px; }
+.metrics input { width: 62px; padding: 4px 6px; background: var(--bg-dark); border: 1px solid var(--border); border-radius: 3px; color: var(--text-light); font-family: 'Space Mono', monospace; font-size: 12px; }
+.metrics input:focus { outline: none; border-color: var(--accent); }
+.metrics .save-rate { font-size: 10px; font-style: italic; color: var(--accent); margin-left: auto; font-family: 'Source Serif 4', serif; }
+.metrics .to-drafts { padding: 4px 0; border: none; background: transparent; color: var(--text-muted); font-size: 9px; cursor: pointer; text-decoration: underline; font-family: 'Space Mono', monospace; }
+.metrics .to-drafts:hover { color: var(--text-light); }
 .drafts-bar { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
 .mini-btn { padding: 5px 9px; font-family: 'Space Mono', monospace; font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; border: 1px solid var(--border); background: var(--bg-input); color: var(--text-light); border-radius: 3px; cursor: pointer; }
 .mini-btn:hover { border-color: var(--accent); color: var(--accent); }
@@ -169,6 +184,10 @@ body { font-family: 'Space Mono', monospace; background: var(--bg-dark); color: 
         <span>Drafts</span><span class="arrow">&#9654;</span>
       </div>
       <div class="accordion-body open">
+        <div class="shelf-toggle">
+          <button id="tab-drafts" class="active" onclick="setShelfView('draft')">Drafts</button>
+          <button id="tab-archive" onclick="setShelfView('archive')">Archive</button>
+        </div>
         <div id="draftList"></div>
         <div class="drafts-bar">
           <button class="mini-btn" onclick="exportDrafts()">Export</button>
@@ -296,6 +315,7 @@ body { font-family: 'Space Mono', monospace; background: var(--bg-dark); color: 
 <script>
 let currentDraftId = null;
 const DRAFTS_KEY = 'ipn_quote_drafts';
+let shelfView = 'draft';
 const GH_TOKEN_KEY = 'ipn_gh_token', GIST_ID_KEY = 'ipn_quote_gist_id', GIST_FILENAME = 'ipn-quote-drafts.json';
 const DRAFTS = [
   {
@@ -328,22 +348,74 @@ const DRAFTS = [
   }
 ];
 
+function quoteText(d){const q=(d.data&&d.data.quote?d.data.quote:'').replace(/\*/g,'');return '"'+q.substring(0,90)+(q.length>90?'…':'')+'"';}
+function saveRateText(m){return (m&&m.reach>0&&m.saves!=null)?((m.saves/m.reach)*100).toFixed(1)+'% save rate':'';}
+function setShelfView(v){shelfView=v;buildDraftShelf();}
 function buildDraftShelf() {
-  const list = getDrafts(), el = document.getElementById('draftList');
+  const all = getDrafts(), el = document.getElementById('draftList');
   if (!el) return;
+  const tD=document.getElementById('tab-drafts'),tA=document.getElementById('tab-archive');
+  if(tD&&tA){tD.classList.toggle('active',shelfView==='draft');tA.classList.toggle('active',shelfView==='archive');}
+  const list = all.filter(d=> shelfView==='archive' ? d.status==='posted' : d.status!=='posted');
   el.innerHTML = '';
-  if (!list.length) { el.innerHTML = '<div class="draft-empty">No saved drafts yet. Build a carousel, then click Save Draft.</div>'; return; }
-  list.slice().sort((a,b)=>b.savedAt-a.savedAt).forEach(d => {
-    const q = (d.data && d.data.quote ? d.data.quote : '').replace(/\*/g,'');
+  if (!list.length) {
+    el.innerHTML = '<div class="draft-empty">'+(shelfView==='archive'
+      ? 'No posted carousels yet. In Drafts, click <strong>Posted</strong> on one you have published to start tracking how it did.'
+      : 'No saved drafts yet. Build a carousel, then click Save Draft.')+'</div>';
+    return;
+  }
+  list.slice().sort((a,b)=> shelfView==='archive' ? (b.postedAt||0)-(a.postedAt||0) : b.savedAt-a.savedAt).forEach(d => {
     const div = document.createElement('div');
-    div.className = 'draft-item';
-    div.innerHTML = '<div class="d-main"><span class="d-title"></span><span class="d-quote"></span></div><button class="d-del" title="Delete draft">×</button>';
-    div.querySelector('.d-title').textContent = d.name || '(untitled)';
-    div.querySelector('.d-quote').textContent = '"' + q.substring(0,90) + (q.length>90?'…':'') + '"';
-    div.querySelector('.d-main').onclick = () => openDraft(d.id);
-    div.querySelector('.d-del').onclick = e => { e.stopPropagation(); deleteDraft(d.id); };
+    if (shelfView==='archive') {
+      const m=d.metrics||{};
+      div.className = 'draft-item archived';
+      div.innerHTML =
+        '<div class="d-row"><div class="d-main"><span class="d-title"></span><span class="d-quote"></span></div><button class="d-del" title="Delete">×</button></div>'+
+        '<div class="metrics">'+
+          '<label>Reach<input type="number" min="0" inputmode="numeric" class="m-reach"></label>'+
+          '<label>Saves<input type="number" min="0" inputmode="numeric" class="m-saves"></label>'+
+          '<label>Shares<input type="number" min="0" inputmode="numeric" class="m-shares"></label>'+
+          '<button class="to-drafts" title="Move back to drafts">↩ draft</button>'+
+          '<span class="save-rate"></span>'+
+        '</div>';
+      div.querySelector('.d-title').textContent = d.name || '(untitled)';
+      div.querySelector('.d-quote').textContent = quoteText(d);
+      div.querySelector('.d-main').onclick = () => openDraft(d.id);
+      div.querySelector('.d-del').onclick = () => deleteDraft(d.id);
+      div.querySelector('.to-drafts').onclick = () => unpost(d.id);
+      const rateEl=div.querySelector('.save-rate'); rateEl.textContent=saveRateText(m);
+      [['reach','.m-reach'],['saves','.m-saves'],['shares','.m-shares']].forEach(([k,sel])=>{
+        const inp=div.querySelector(sel); if(m[k]!=null)inp.value=m[k];
+        inp.onchange=()=>setMetric(d.id,k,inp.value,rateEl);
+      });
+    } else {
+      div.className = 'draft-item';
+      div.innerHTML = '<div class="d-main"><span class="d-title"></span><span class="d-quote"></span></div><button class="d-post" title="Mark as posted">Posted</button><button class="d-del" title="Delete draft">×</button>';
+      div.querySelector('.d-title').textContent = d.name || '(untitled)';
+      div.querySelector('.d-quote').textContent = quoteText(d);
+      div.querySelector('.d-main').onclick = () => openDraft(d.id);
+      div.querySelector('.d-post').onclick = e => { e.stopPropagation(); markPosted(d.id); };
+      div.querySelector('.d-del').onclick = e => { e.stopPropagation(); deleteDraft(d.id); };
+    }
     el.appendChild(div);
   });
+}
+async function markPosted(id){
+  const list=await currentList();const it=list.find(x=>x.id===id);if(!it)return;
+  it.status='posted';it.postedAt=Date.now();if(!it.metrics)it.metrics={};
+  putDrafts(list);shelfView='archive';buildDraftShelf();await pushDrafts(list);
+}
+async function unpost(id){
+  const list=await currentList();const it=list.find(x=>x.id===id);if(!it)return;
+  it.status='draft';putDrafts(list);buildDraftShelf();await pushDrafts(list);
+}
+function setMetric(id,key,val,rateEl){
+  const list=getDrafts();const it=list.find(x=>x.id===id);if(!it)return;
+  if(!it.metrics)it.metrics={};
+  it.metrics[key]= val===''?null:Math.max(0,parseInt(val,10)||0);
+  putDrafts(list);
+  if(rateEl)rateEl.textContent=saveRateText(it.metrics);
+  pushDrafts(list);
 }
 
 // ===== Saved-draft library: local cache + GitHub gist sync =====
