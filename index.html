@@ -32,6 +32,10 @@ body { font-family: 'Space Mono', monospace; background: var(--bg-dark); color: 
 .left-panel { background: var(--bg-panel); border-right: 1px solid var(--border); overflow-y: auto; display: flex; flex-direction: column; }
 .panel-header { padding: 16px 20px; border-bottom: 1px solid var(--border); font-size: 14px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; color: var(--accent); flex-shrink: 0; }
 .panel-note { padding: 8px 20px 0; font-size: 10px; color: var(--text-muted); line-height: 1.5; }
+.tool-switch { display: flex; gap: 4px; padding: 12px 20px 0; flex-wrap: wrap; }
+.tool-switch a, .tool-switch span { font-family: 'Space Mono', monospace; font-size: 10px; font-weight: 700; letter-spacing: 0.5px; text-transform: uppercase; padding: 5px 10px; border: 1px solid var(--border); border-radius: 3px; text-decoration: none; color: var(--text-muted); background: var(--bg-input); }
+.tool-switch a:hover { border-color: var(--accent); color: var(--accent); }
+.tool-switch .active { background: var(--accent); color: #1b1814; border-color: var(--accent); }
 
 .accordion-section { border-bottom: 1px solid var(--border); }
 .accordion-header { display: flex; justify-content: space-between; align-items: center; padding: 12px 20px; cursor: pointer; font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-light); user-select: none; transition: background 0.15s; }
@@ -178,6 +182,7 @@ body { font-family: 'Space Mono', monospace; background: var(--bg-dark); color: 
   <div class="left-panel">
     <div class="panel-header">Quote Carousel Tool</div>
     <div class="panel-note">Quote-commentary carousels. The quote is the door; the commentary is the value. Bare quote slide, quiet labels, a hand-marked key phrase on the Brain slide, plain-text CTA. Brand mark only on the final slide.</div>
+    <div class="tool-switch"><span class="active">Quote</span><a href="https://boisterous-madeleine-04547d.netlify.app/">Study</a><a href="https://chimerical-marshmallow-872f9c.netlify.app/">Carousel</a></div>
 
     <div class="accordion-section">
       <div class="accordion-header active" onclick="toggleAccordion(this)">
