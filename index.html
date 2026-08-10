@@ -350,6 +350,20 @@ const DRAFTS = [
     reframe: "Staying calm under pressure isn't luck or temperament. It's a *skill you train* — and it may be the one that decides whether everything else you built actually shows up.",
     ctaPunch: "All the training in the world only counts if you can use it *under pressure*.",
     ctaAction: "Take the quiz → Lose Yourself"
+  },
+  {
+    title: "Human Brains Don't Have Smart Juice — Built Not Born",
+    series: "Quote Notes", number: "14",
+    quote: "Human brains don't have smart juice.",
+    attribution: "",
+    tension: "You'd never say you believe in it. But you check the gauge every time something gets hard.",
+    situation: "We talk as if every brain ships with a fixed ration of *mental horsepower*, doled out at birth. \"She's so bright.\" \"He doesn't have the horsepower.\" \"I'm just not smart enough for this.\" You never pictured a fluid, but that's the *model you've been running*.",
+    principle: "Watch what the model does with struggle: hit something hard, feel the strain, and the needle reads *near empty*. But no one has ever found the juice. It belongs with the humors and phlogiston, invisible substances invented to explain what we couldn't yet see, *gone the moment we could*.",
+    brain: "Open up a brain and there is no tank to read. There are *networks built through learning*, refined by practice until they run on their own. What we call intelligence is what those networks have *learned to do*. Nothing to have more or less of.",
+    sketch: "underline",
+    reframe: "So the strain of a hard problem was never your reserve draining. It was *wiring being built*. You're not running low. You're *under construction*.",
+    ctaPunch: "You weren't issued a ration. You're *building the whole thing*.",
+    ctaAction: "Pre-order → GeniusAndImpostor.com"
   }
 ];
 
@@ -429,11 +443,20 @@ function putDrafts(arr){localStorage.setItem(DRAFTS_KEY,JSON.stringify(arr||[]))
 function clone(o){return JSON.parse(JSON.stringify(o));}
 function mergeById(a,b){const m=new Map();[...(a||[]),...(b||[])].forEach(d=>{if(!d||!d.id)return;const ex=m.get(d.id);if(!ex||(d.savedAt||0)>(ex.savedAt||0))m.set(d.id,d);});return [...m.values()];}
 function seedIfFirstRun(){
-  if(localStorage.getItem('ipn_quote_seeded'))return;
-  if(getDrafts().length===0){
-    putDrafts(DRAFTS.map((d,i)=>{const c=clone(d);delete c.title;return {id:'seed_'+i,name:d.title,savedAt:Date.now()-(DRAFTS.length-i)*1000,data:c};}));
-  }
-  localStorage.setItem('ipn_quote_seeded','1');
+  // Versioned seeding: '1' was the original flag (2 seeds); now the flag stores how many
+  // seeds have been applied, so newly shipped DRAFTS entries append on existing browsers
+  // without resurrecting seeds the user deleted.
+  const raw=localStorage.getItem('ipn_quote_seeded');
+  const done = raw==='1' ? 2 : (parseInt(raw,10)||0);
+  if(done>=DRAFTS.length)return;
+  const list=getDrafts();
+  DRAFTS.forEach((d,i)=>{
+    if(i<done||list.some(x=>x.id==='seed_'+i))return;
+    const c=clone(d);delete c.title;
+    list.push({id:'seed_'+i,name:d.title,savedAt:Date.now()-(DRAFTS.length-i)*1000,data:c});
+  });
+  putDrafts(list);
+  localStorage.setItem('ipn_quote_seeded',String(DRAFTS.length));
 }
 function openDraft(id){const d=getDrafts().find(x=>x.id===id);if(!d)return;currentDraftId=id;loadData(d.data);}
 async function deleteDraft(id){
