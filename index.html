@@ -122,6 +122,17 @@ body { font-family: 'Space Mono', monospace; background: var(--bg-dark); color: 
 .quote-attrib { margin-top: 0.95em; font-family: 'Space Mono', monospace; font-size: 0.42em; letter-spacing: 0.05em; color: var(--gold); }
 .quote-tension { margin-top: 0.75em; font-style: italic; font-size: 0.62em; line-height: 1.5; color: var(--cream-muted); }
 
+/* PHOTO OPENER (someone else's words): photo across the top, quote on the dark panel below.
+   Background-image (not <img>) so html2canvas exports the cover crop; B&W is baked in at load time. */
+.photo-top { position: absolute; left: 0; right: 0; top: 0; height: 60%; background-size: cover; background-repeat: no-repeat; z-index: 0; }
+.photo-fade { position: absolute; left: 0; right: 0; top: 44%; height: 16.5%; background: linear-gradient(to bottom, rgba(27,24,20,0) 0%, rgba(27,24,20,0.8) 65%, #1b1814 100%); z-index: 0; }
+.photo-credit { position: absolute; right: 4%; top: 55%; font-family: 'Space Mono', monospace; font-size: 0.26em; letter-spacing: 0.04em; color: rgba(236,228,211,0.55); z-index: 1; }
+.has-photo .slide-content { padding-top: 0; padding-bottom: 8%; }
+.has-photo .slide-body { justify-content: flex-end; }
+.has-photo .quote-mark { margin-bottom: 0.1em; }
+/* long quote + tension under a photo: smaller type so the text stays on the panel */
+.photo-short .quote-tension { font-size: 0.55em; }
+
 /* body slides — quiet label */
 .section-label { font-family: 'Source Serif 4', serif; font-style: italic; font-size: 0.6em; letter-spacing: 0.01em; color: var(--cream-muted); margin-bottom: 0.7em; }
 
@@ -182,7 +193,7 @@ body { font-family: 'Space Mono', monospace; background: var(--bg-dark); color: 
   <div class="left-panel">
     <div class="panel-header">Quote Carousel Tool</div>
     <div class="panel-note">Quote-commentary carousels. The quote is the door; the commentary is the value. Bare quote slide, quiet labels, a hand-marked key phrase on the Brain slide, plain-text CTA. Brand mark only on the final slide.</div>
-    <div class="tool-switch"><span class="active">Quote</span><a href="https://boisterous-madeleine-04547d.netlify.app/">Study</a><a href="https://chimerical-marshmallow-872f9c.netlify.app/">Carousel</a><a href="https://genius-vs-impostor.netlify.app/">G/I</a><a href="https://found-clip-carousel.netlify.app/">Found</a></div>
+    <div class="tool-switch"><span class="active">Quote</span><a href="https://boisterous-madeleine-04547d.netlify.app/">Study</a><a href="https://chimerical-marshmallow-872f9c.netlify.app/">Carousel</a><a href="https://genius-vs-impostor.netlify.app/">G/I</a><a href="https://found-clip-carousel.netlify.app/">Found</a><a href="https://earnest-clafoutis-dccc40.netlify.app/">Plain</a></div>
 
     <div class="accordion-section">
       <div class="accordion-header active" onclick="toggleAccordion(this)">
@@ -242,6 +253,21 @@ body { font-family: 'Space Mono', monospace; background: var(--bg-dark); color: 
         <div class="editor-field">
           <div class="editor-label">The Quote (slide 1) — punchiest fragment</div>
           <textarea class="editor-textarea-field" id="edQuote" oninput="updatePreview()"></textarea>
+        </div>
+      </div>
+      <div class="editor-row">
+        <div class="editor-field">
+          <div class="editor-label">Photo (slide 1, someone else's words) <span class="field-hint">upload or paste a URL; converted to black and white</span></div>
+          <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;">
+            <input type="file" accept="image/*" id="edPhotoFile" onchange="photoFromFile(this)" style="font-size:10px;color:var(--text-muted);max-width:190px;">
+            <input type="text" class="editor-input" id="edPhotoUrl" placeholder="or image URL" style="flex:1;min-width:120px;" onchange="photoFromUrl(this.value)">
+            <button class="mini-btn" onclick="clearPhoto()">Remove</button>
+          </div>
+          <div style="display:flex;gap:10px;align-items:center;margin-top:6px;">
+            <span class="field-hint">Crop</span>
+            <input type="range" id="edPhotoPos" min="0" max="100" value="30" oninput="updatePreview()" style="flex:1;">
+            <input type="text" class="editor-input" id="edPhotoCredit" placeholder="credit (CC photos)" oninput="updatePreview()" style="flex:1;">
+          </div>
         </div>
       </div>
       <div class="editor-row">
@@ -559,6 +585,9 @@ function loadData(d) {
   set('edSeries', d.series || 'Quote Notes');
   set('edNumber', d.number || '01');
   set('edQuote', d.quote || '');
+  currentPhoto = d.photo || '';
+  set('edPhotoPos', d.photoPos != null ? d.photoPos : 30);
+  set('edPhotoCredit', d.photoCredit || '');
   set('edAttrib', d.attribution || '');
   set('edTension', d.tension || '');
   set('edSituation', d.situation || '');
@@ -576,6 +605,9 @@ function getEditorState() {
     series: document.getElementById('edSeries').value,
     number: document.getElementById('edNumber').value,
     quote: document.getElementById('edQuote').value,
+    photo: currentPhoto || '',
+    photoPos: Number(document.getElementById('edPhotoPos').value),
+    photoCredit: document.getElementById('edPhotoCredit').value,
     attribution: document.getElementById('edAttrib').value,
     tension: document.getElementById('edTension').value,
     situation: document.getElementById('edSituation').value,
@@ -645,6 +677,39 @@ function sketchSVG(kind) {
   return '';
 }
 
+let currentPhoto = '';
+// Resize to 1080 wide, convert to black and white, store as a JPEG data URI (export-safe, syncs with the draft).
+function ingestPhoto(src) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = () => {
+      const w = 1080, h = Math.round(img.naturalHeight * 1080 / img.naturalWidth);
+      const c = document.createElement('canvas'); c.width = w; c.height = h;
+      const ctx = c.getContext('2d'); ctx.drawImage(img, 0, 0, w, h);
+      try {
+        const px = ctx.getImageData(0, 0, w, h), d = px.data;
+        for (let i = 0; i < d.length; i += 4) { const y = 0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2]; d[i] = d[i + 1] = d[i + 2] = y; }
+        ctx.putImageData(px, 0, 0);
+        resolve(c.toDataURL('image/jpeg', 0.84));
+      } catch (e) { reject(new Error('That site blocks reuse of its image. Download it and upload the file instead.')); }
+    };
+    img.onerror = () => reject(new Error('Could not load that image.'));
+    img.src = src;
+  });
+}
+async function photoFromFile(input) {
+  const f = input.files && input.files[0]; if (!f) return;
+  const r = new FileReader();
+  r.onload = async () => { try { currentPhoto = await ingestPhoto(r.result); updatePreview(); } catch (e) { alert(e.message); } };
+  r.readAsDataURL(f);
+}
+async function photoFromUrl(url) {
+  if (!url) return;
+  try { currentPhoto = await ingestPhoto(url.trim()); updatePreview(); } catch (e) { alert(e.message); }
+}
+function clearPhoto() { currentPhoto = ''; document.getElementById('edPhotoUrl').value = ''; document.getElementById('edPhotoFile').value = ''; updatePreview(); }
+
 const SLIDE_DEFS = [
   { type: 'quote' },
   { type: 'body', label: 'On the situation', key: 'situation' },
@@ -668,7 +733,7 @@ function buildSlideHTML(idx, s) {
 
   let body = '';
   if (isQuote) {
-    const fs = quoteFontEm(s.quote);
+    const fs = quoteFontEm(s.quote) * (s.photo ? (((s.quote || '').length + (s.tension || '').length > 150) ? 0.7 : 0.82) : 1);
     body = `<div class="slide-body">
       <div class="quote-mark">&ldquo;</div>
       <div class="quote-text" style="font-size:${fs}em;">${renderRich(s.quote)}</div>
@@ -701,8 +766,10 @@ function buildSlideHTML(idx, s) {
   const top = isQuote ? '' : `<div class="slide-top">${counter}</div>`;
   const foot = isQuote ? '' : footHTML(isCta, s.series, s.number);
 
+  const photo = (isQuote && s.photo) ? `<div class="photo-top" style="background-image:url('${s.photo}');background-position:50% ${Number(s.photoPos) || 0}%;"></div><div class="photo-fade"></div>${s.photoCredit ? `<div class="photo-credit">${esc(s.photoCredit)}</div>` : ''}` : '';
   return `<div class="slide-wrapper" data-slide="${idx}">
-    <div class="slide">
+    <div class="slide${photo ? ' has-photo' : ''}${photo && ((s.quote || '').length + (s.tension || '').length > 150) ? ' photo-short' : ''}">
+      ${photo}
       <div class="slide-content">
         ${top}
         ${body}
