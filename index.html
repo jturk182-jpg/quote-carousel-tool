@@ -548,16 +548,26 @@ async function pullArrayFromGist(){
   const res=await ghFetch('https://api.github.com/gists/'+id);
   if(!res.ok)throw new Error('Could not read gist ('+res.status+').');
   const g=await res.json();const f=g.files&&g.files[GIST_FILENAME];
-  let arr=[];if(f&&f.content){try{arr=JSON.parse(f.content)||[];}catch(e){arr=[];}}
-  return Array.isArray(arr)?arr:[];
+  if(!f){pullBroken=false;return [];}
+  // GitHub's API truncates gist files over 1 MB (photo openers push the library past that).
+  // The raw URL serves the whole file for that exact revision.
+  let text=f.content||'';
+  if(f.truncated&&f.raw_url){const r=await fetch(f.raw_url);if(!r.ok)throw new Error('Could not read the full drafts file ('+r.status+').');text=await r.text();}
+  let arr;
+  try{arr=text?JSON.parse(text):[];}catch(e){pullBroken=true;throw new Error('Drafts file could not be read. Nothing was changed.');}
+  if(!Array.isArray(arr)){pullBroken=true;throw new Error('Drafts file is not a list. Nothing was changed.');}
+  pullBroken=false;return arr;
 }
+// Set when the gist exists but couldn't be read: never push over it from a possibly empty local copy.
+let pullBroken=false;
 async function currentList(){
-  if(isConnected()){try{const arr=await pullArrayFromGist();putDrafts(arr);return arr;}catch(e){setSyncStatus('Offline — using local copy');return getDrafts();}}
+  if(isConnected()){try{const arr=await pullArrayFromGist();putDrafts(arr);return arr;}catch(e){setSyncStatus(pullBroken?e.message:'Offline — using local copy');return getDrafts();}}
   return getDrafts();
 }
 async function pushDrafts(arr){
   if(!isConnected())return;
-  try{setSyncStatus('Syncing…');const id=await ensureGistId();const res=await ghFetch('https://api.github.com/gists/'+id,{method:'PATCH',body:JSON.stringify({files:{[GIST_FILENAME]:{content:JSON.stringify(arr,null,2)}}})});if(!res.ok)throw new Error('status '+res.status);setSyncStatus('Synced ✓ · '+arr.length+' draft(s)');}
+  if(pullBroken){setSyncStatus('Not synced: the drafts file could not be read, so it was left untouched.');return;}
+  try{setSyncStatus('Syncing…');const id=await ensureGistId();const res=await ghFetch('https://api.github.com/gists/'+id,{method:'PATCH',body:JSON.stringify({files:{[GIST_FILENAME]:{content:JSON.stringify(arr)}}})});if(!res.ok)throw new Error('status '+res.status);setSyncStatus('Synced ✓ · '+arr.length+' draft(s)');}
   catch(e){setSyncStatus('Offline — saved locally');}
 }
 async function manualPull(){
