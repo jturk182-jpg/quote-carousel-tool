@@ -186,6 +186,14 @@ body { font-family: 'Space Mono', monospace; background: var(--bg-dark); color: 
 .status-msg { font-size: 11px; color: var(--text-muted); padding: 8px 0; }
 .status-msg.error { color: #d8675a; }
 
+
+/* ====================== EDIT ON THE SLIDE ====================== */
+.edit-hint { font-size: 10px; color: var(--text-muted); line-height: 1.5; margin-bottom: 10px; }
+.edit-hint span { color: var(--accent); }
+.preview-grid [data-ed] { cursor: text; border-radius: 3px; transition: box-shadow 0.15s; }
+@media (hover: hover) { .preview-grid [data-ed]:hover { box-shadow: 0 0 0 1.5px rgba(201,162,75,0.45); } }
+.preview-grid .ed-empty { opacity: 0.4; font-style: italic; }
+.slide-edit { display: block; width: 100%; padding: 0.15em 0.25em; margin: -0.15em -0.25em; background: rgba(201,162,75,0.1); border: 1.5px solid var(--gold); border-radius: 3px; outline: none; resize: none; overflow: hidden; font: inherit; line-height: inherit; letter-spacing: inherit; color: inherit; box-sizing: content-box; }
 /* ====================== TOOL NAV + PHONE LAYOUT ====================== */
 /* Full-width nav across the top of every carousel tool. Under 860px the two
    panels become Drafts / Post tabs so the slides get the full screen width. */
@@ -218,6 +226,7 @@ body { display: flex; flex-direction: column; }
   .editor-row { flex-direction: column; gap: 10px; }
   .editor-field.small { flex: none; width: 100%; }
   .editor-input, .editor-textarea-field, .editor-select, .json-textarea, .token-input { font-size: 16px; }
+  .slide-edit { font-size: max(16px, 1em); } /* under 16px, iPhone zooms the page on focus */
 }
 </style>
 </head>
@@ -276,6 +285,7 @@ body { display: flex; flex-direction: column; }
 
   <div class="right-panel">
     <div class="editor-section">
+      <div class="edit-hint">Click any text on a slide to edit it. <span>*gold*</span> and <span>**bold**</span> work inside the text. Click away (or press Esc) to finish.</div>
       <div class="editor-row">
         <div class="editor-field">
           <div class="editor-label">Series label (final slide only)</div>
@@ -285,12 +295,19 @@ body { display: flex; flex-direction: column; }
           <div class="editor-label">No.</div>
           <input type="text" class="editor-input" id="edNumber" value="01" oninput="updatePreview()">
         </div>
-      </div>
-
-      <div class="editor-row">
         <div class="editor-field">
-          <div class="editor-label">The Quote (slide 1) — punchiest fragment</div>
-          <textarea class="editor-textarea-field" id="edQuote" oninput="updatePreview()"></textarea>
+          <div class="editor-label">Brain slide mark</div>
+          <select class="editor-select" id="edSketch" onchange="updatePreview()">
+            <option value="none">none</option>
+            <optgroup label="Annotation (any topic, no art)">
+              <option value="underline">underline the key phrase</option>
+              <option value="circle">circle the key phrase</option>
+            </optgroup>
+            <optgroup label="Diagram (bespoke / library)">
+              <option value="block">blocked access (skill → noise → moment)</option>
+              <option value="loud">loud signal (drowns the skill)</option>
+            </optgroup>
+          </select>
         </div>
       </div>
       <div class="editor-row">
@@ -308,61 +325,11 @@ body { display: flex; flex-direction: column; }
           </div>
         </div>
       </div>
-      <div class="editor-row">
-        <div class="editor-field">
-          <div class="editor-label">Attribution</div>
-          <input type="text" class="editor-input" id="edAttrib" oninput="updatePreview()">
-        </div>
-        <div class="editor-field">
-          <div class="editor-label">Hook tension line</div>
-          <input type="text" class="editor-input" id="edTension" oninput="updatePreview()">
-        </div>
-      </div>
-
-      <div class="editor-row">
-        <div class="editor-field">
-          <div class="editor-label">2 · The Situation <span class="field-hint">(*gold*, **bold**)</span></div>
-          <textarea class="editor-textarea-field" id="edSituation" oninput="updatePreview()"></textarea>
-        </div>
-        <div class="editor-field">
-          <div class="editor-label">3 · The Principle</div>
-          <textarea class="editor-textarea-field" id="edPrinciple" oninput="updatePreview()"></textarea>
-        </div>
-      </div>
-      <div class="editor-row">
-        <div class="editor-field">
-          <div class="editor-label">4 · The Brain</div>
-          <textarea class="editor-textarea-field" id="edBrain" oninput="updatePreview()"></textarea>
-          <div style="margin-top:6px;">
-            <div class="editor-label">Brain sketch</div>
-            <select class="editor-select" id="edSketch" onchange="updatePreview()">
-              <option value="none">none</option>
-              <optgroup label="Annotation (any topic, no art)">
-                <option value="underline">underline the key phrase</option>
-                <option value="circle">circle the key phrase</option>
-              </optgroup>
-              <optgroup label="Diagram (bespoke / library)">
-                <option value="block">blocked access (skill → noise → moment)</option>
-                <option value="loud">loud signal (drowns the skill)</option>
-              </optgroup>
-            </select>
-          </div>
-        </div>
-        <div class="editor-field">
-          <div class="editor-label">5 · The Reframe</div>
-          <textarea class="editor-textarea-field" id="edReframe" oninput="updatePreview()"></textarea>
-        </div>
-      </div>
-
-      <div class="editor-row">
-        <div class="editor-field">
-          <div class="editor-label">6 · CTA punch line</div>
-          <textarea class="editor-textarea-field" id="edCtaPunch" oninput="updatePreview()"></textarea>
-        </div>
-        <div class="editor-field">
-          <div class="editor-label">CTA action</div>
-          <input type="text" class="editor-input" id="edCtaAction" value="Take the quiz → Lose Yourself" oninput="updatePreview()">
-        </div>
+      <!-- slide text: edited on the slides themselves (see startSlideEdit) -->
+      <div hidden>
+        <textarea id="edQuote"></textarea><input id="edAttrib"><input id="edTension">
+        <textarea id="edSituation"></textarea><textarea id="edPrinciple"></textarea><textarea id="edBrain"></textarea>
+        <textarea id="edReframe"></textarea><textarea id="edCtaPunch"></textarea><input id="edCtaAction" value="Take the quiz → Lose Yourself">
       </div>
     </div>
 
@@ -772,7 +739,12 @@ function footHTML(showBrand, series, number) {
   return `<div class="slide-foot">${left}<span class="sig">${showBrand ? '@brainjojosh' : 'J. Turknett'}</span></div>`;
 }
 
-function buildSlideHTML(idx, s) {
+// In the preview (not the PNG export) each piece of slide text carries the id of
+// the field it edits, and empty optional fields show a faint slot to click.
+function edAttr(id, edit) { return edit ? ` data-ed="${id}"` : ''; }
+function slot(id, cls, label, edit) { return edit ? `<div class="${cls} ed-empty" data-ed="${id}">+ ${label}</div>` : ''; }
+
+function buildSlideHTML(idx, s, edit) {
   const def = SLIDE_DEFS[idx];
   const total = SLIDE_DEFS.length;
   const counter = idx === 0 ? '' : `<div class="slide-counter">${idx + 1} / ${total}</div>`;
@@ -784,14 +756,14 @@ function buildSlideHTML(idx, s) {
     const fs = quoteFontEm(s.quote) * (s.photo ? (((s.quote || '').length + (s.tension || '').length > 150) ? 0.7 : 0.82) : 1);
     body = `<div class="slide-body">
       <div class="quote-mark">&ldquo;</div>
-      <div class="quote-text" style="font-size:${fs}em;">${renderRich(s.quote)}</div>
-      ${s.attribution ? `<div class="quote-attrib">&mdash; ${esc(s.attribution)}</div>` : ''}
-      ${s.tension ? `<div class="quote-tension">${renderRich(s.tension)}</div>` : ''}
+      ${s.quote || !edit ? `<div class="quote-text" style="font-size:${fs}em;"${edAttr('edQuote', edit)}>${renderRich(s.quote)}</div>` : slot('edQuote', 'quote-text', 'quote', edit)}
+      ${s.attribution ? `<div class="quote-attrib"${edAttr('edAttrib', edit)}>&mdash; ${esc(s.attribution)}</div>` : slot('edAttrib', 'quote-attrib', 'attribution', edit)}
+      ${s.tension ? `<div class="quote-tension"${edAttr('edTension', edit)}>${renderRich(s.tension)}</div>` : slot('edTension', 'quote-tension', 'tension line', edit)}
     </div>`;
   } else if (isCta) {
     body = `<div class="cta-body">
-      ${s.ctaPunch ? `<div class="cta-punch">${renderRich(s.ctaPunch)}</div>` : ''}
-      ${s.ctaAction ? `<div class="cta-action">${esc(s.ctaAction)} &rarr;</div>` : ''}
+      ${s.ctaPunch ? `<div class="cta-punch"${edAttr('edCtaPunch', edit)}>${renderRich(s.ctaPunch)}</div>` : slot('edCtaPunch', 'cta-punch', 'punch line', edit)}
+      ${s.ctaAction ? `<div class="cta-action"${edAttr('edCtaAction', edit)}>${esc(s.ctaAction)} &rarr;</div>` : slot('edCtaAction', 'cta-action', 'action', edit)}
     </div>`;
   } else if (def.type === 'brain') {
     const kind = s.sketch || 'none';
@@ -800,13 +772,13 @@ function buildSlideHTML(idx, s) {
     const sk = isDiagram ? `<div class="brain-sketch">${sketchSVG(kind)}</div>` : '';
     body = `<div class="slide-body">
       <div class="section-label">${esc(def.label)}</div>
-      <div class="body-text">${bodyHTML}</div>
+      <div class="body-text"${edAttr(BODY_FIELD[def.key], edit)}>${bodyHTML || (edit ? '<span class="ed-empty">+ text</span>' : '')}</div>
       ${sk}
     </div>`;
   } else {
     body = `<div class="slide-body">
       <div class="section-label">${esc(def.label)}</div>
-      <div class="body-text">${renderRich(s[def.key])}</div>
+      <div class="body-text"${edAttr(BODY_FIELD[def.key], edit)}>${renderRich(s[def.key]) || (edit ? '<span class="ed-empty">+ text</span>' : '')}</div>
     </div>`;
   }
 
@@ -827,11 +799,35 @@ function buildSlideHTML(idx, s) {
   </div>`;
 }
 
+const BODY_FIELD = { situation: 'edSituation', principle: 'edPrinciple', brain: 'edBrain', reframe: 'edReframe' };
+
+// Click a piece of slide text: it turns into a textarea holding the raw text
+// (with its *gold* / **bold** markers). Click away or Esc saves and redraws.
+function startSlideEdit(el) {
+  if (el.querySelector('textarea')) return;
+  const field = document.getElementById(el.dataset.ed);
+  const ta = document.createElement('textarea');
+  ta.className = 'slide-edit';
+  ta.value = field.value;
+  const h = el.offsetHeight;
+  el.classList.remove('ed-empty');
+  el.innerHTML = ''; el.appendChild(ta);
+  const fit = () => { ta.style.height = 'auto'; ta.style.height = Math.max(h, ta.scrollHeight) + 'px'; };
+  fit(); ta.addEventListener('input', fit);
+  ta.addEventListener('keydown', e => { if (e.key === 'Escape' || (e.key === 'Enter' && (e.metaKey || e.ctrlKey))) ta.blur(); });
+  ta.addEventListener('blur', () => { field.value = ta.value.trim(); updatePreview(); });
+  ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length);
+}
+document.getElementById('previewGrid').addEventListener('click', e => {
+  const el = e.target.closest('[data-ed]');
+  if (el) startSlideEdit(el);
+});
+
 function updatePreview() {
   const s = getEditorState();
   const grid = document.getElementById('previewGrid');
   let html = '';
-  for (let i = 0; i < SLIDE_DEFS.length; i++) html += buildSlideHTML(i, s);
+  for (let i = 0; i < SLIDE_DEFS.length; i++) html += buildSlideHTML(i, s, true);
   grid.innerHTML = html;
   grid.querySelectorAll('.slide-wrapper').forEach(w => {
     const slide = w.querySelector('.slide');
@@ -913,7 +909,13 @@ if (_first) { openDraft(_first.id); } else { loadData(DRAFTS[0]); }
       return r;
     };
   });
-  window.addEventListener('resize', function () { updatePreview(); });
+  // re-fit slide type when the width changes (rotation, window resize), but not
+  // when only the height changes (phone keyboard) or while text is being edited
+  var lastW = window.innerWidth;
+  window.addEventListener('resize', function () {
+    if (window.innerWidth === lastW || document.querySelector('#previewGrid .slide-edit')) return;
+    lastW = window.innerWidth; updatePreview();
+  });
   setView('drafts');
 })();
 </script>
