@@ -185,15 +185,53 @@ body { font-family: 'Space Mono', monospace; background: var(--bg-dark); color: 
 ::-webkit-scrollbar-thumb { background: #555; border-radius: 3px; }
 .status-msg { font-size: 11px; color: var(--text-muted); padding: 8px 0; }
 .status-msg.error { color: #d8675a; }
+
+/* ====================== TOOL NAV + PHONE LAYOUT ====================== */
+/* Full-width nav across the top of every carousel tool. Under 860px the two
+   panels become Drafts / Post tabs so the slides get the full screen width. */
+body { display: flex; flex-direction: column; }
+.app-container { flex: 1; min-height: 0; height: auto; grid-template-rows: minmax(0, 1fr); }
+.tool-nav { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; padding: 10px 20px; background: var(--bg-panel); border-bottom: 1px solid var(--border); flex-shrink: 0; }
+.tool-nav-title { font-family: 'Space Mono', monospace; font-size: 13px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; color: var(--accent); }
+.tool-nav .tool-switch { margin-left: auto; padding: 0; gap: 4px; flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
+.tool-nav .tool-switch::-webkit-scrollbar { display: none; }
+.tool-nav .tool-switch a, .tool-nav .tool-switch span { font-size: 11px; padding: 6px 12px; white-space: nowrap; }
+.m-tabs { display: none; }
+@media (max-width: 860px) {
+  body { display: block; height: auto; min-height: 100vh; overflow: visible; }
+  .tool-nav { position: sticky; top: 0; z-index: 50; gap: 8px; padding: 10px 16px 0; }
+  .tool-nav-title { font-size: 12px; }
+  .tool-nav .tool-switch { margin-left: 0; width: 100%; }
+  .tool-nav .tool-switch a, .tool-nav .tool-switch span { flex: 1 1 auto; text-align: center; font-size: 10px; padding: 7px 6px; }
+  .m-tabs { display: flex; flex-basis: calc(100% + 32px); margin: 2px -16px 0; border-top: 1px solid var(--border); }
+  .m-tabs button { flex: 1; padding: 12px 0; background: none; border: 0; border-bottom: 2px solid transparent; color: var(--text-muted); font-family: 'Space Mono', monospace; font-size: 12px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; cursor: pointer; }
+  .m-tabs button.active { color: var(--accent); border-bottom-color: var(--accent); }
+  .app-container { display: block; height: auto; }
+  .left-panel { overflow: visible; border-right: 0; }
+  .right-panel { overflow: visible; }
+  body:not([data-mview="post"]) .right-panel { display: none; }
+  body[data-mview="post"] .left-panel { display: none; }
+  .preview-section { order: 1; flex: none; overflow: visible; min-height: 0; padding: 16px; }
+  .preview-grid { grid-template-columns: 1fr !important; max-width: 480px; margin: 0 auto 8px; gap: 14px; overflow: visible; }
+  .export-bar { order: 2; flex-wrap: wrap; padding: 12px 16px; }
+  .editor-section { order: 3; max-height: none; overflow: visible; padding: 16px; border-bottom: 0; border-top: 1px solid var(--border); }
+  .editor-row { flex-direction: column; gap: 10px; }
+  .editor-field.small { flex: none; width: 100%; }
+  .editor-input, .editor-textarea-field, .editor-select, .json-textarea, .token-input { font-size: 16px; }
+}
 </style>
 </head>
 <body>
 
+<nav class="tool-nav">
+  <div class="tool-nav-title">Quote Carousel Tool</div>
+  <div class="tool-switch"><span class="active">Quote</span><a href="https://boisterous-madeleine-04547d.netlify.app/">Study</a><a href="https://chimerical-marshmallow-872f9c.netlify.app/">Carousel</a><a href="https://genius-vs-impostor.netlify.app/">G/I</a><a href="https://found-clip-carousel.netlify.app/">Found</a><a href="https://earnest-clafoutis-dccc40.netlify.app/">Plain</a></div>
+  <div class="m-tabs"><button data-v="drafts">Drafts</button><button data-v="post">Post</button></div>
+</nav>
+
 <div class="app-container">
   <div class="left-panel">
-    <div class="panel-header">Quote Carousel Tool</div>
     <div class="panel-note">Quote-commentary carousels. The quote is the door; the commentary is the value. Bare quote slide, quiet labels, a hand-marked key phrase on the Brain slide, plain-text CTA. Brand mark only on the final slide.</div>
-    <div class="tool-switch"><span class="active">Quote</span><a href="https://boisterous-madeleine-04547d.netlify.app/">Study</a><a href="https://chimerical-marshmallow-872f9c.netlify.app/">Carousel</a><a href="https://genius-vs-impostor.netlify.app/">G/I</a><a href="https://found-clip-carousel.netlify.app/">Found</a><a href="https://earnest-clafoutis-dccc40.netlify.app/">Plain</a></div>
 
     <div class="accordion-section">
       <div class="accordion-header active" onclick="toggleAccordion(this)">
@@ -850,6 +888,34 @@ if (isConnected()) { manualPull(); } else { setSyncStatus('Local only'); }
 document.getElementById('import-file').addEventListener('change', e => { const f = e.target.files && e.target.files[0]; if (f) importDraftsFile(f); e.target.value = ''; });
 const _first = getDrafts().slice().sort((a,b)=>b.savedAt-a.savedAt)[0];
 if (_first) { openDraft(_first.id); } else { loadData(DRAFTS[0]); }
+</script>
+<script>
+// ============ PHONE LAYOUT: Drafts / Post tabs ============
+// Under 860px the panels become tabs. Opening a draft (or loading JSON) jumps
+// to the Post tab, and the preview re-renders once visible so the slide type
+// is sized to the real card width.
+(function () {
+  var mq = window.matchMedia('(max-width: 860px)');
+  function setView(v) {
+    document.body.setAttribute('data-mview', v);
+    document.querySelectorAll('.m-tabs button').forEach(function (b) { b.classList.toggle('active', b.getAttribute('data-v') === v); });
+    if (v === 'post') requestAnimationFrame(function () { updatePreview(); });
+    if (mq.matches) window.scrollTo(0, 0);
+  }
+  document.querySelectorAll('.m-tabs button').forEach(function (b) { b.onclick = function () { setView(b.getAttribute('data-v')); }; });
+  ['openDraft', 'loadJSONFromBox'].forEach(function (name) {
+    var fn = window[name];
+    if (typeof fn !== 'function') return;
+    window[name] = function () {
+      var r = fn.apply(this, arguments);
+      var err = document.querySelector('.left-panel .status-msg.error');
+      if (mq.matches && !(err && err.textContent.trim())) setView('post');
+      return r;
+    };
+  });
+  window.addEventListener('resize', function () { updatePreview(); });
+  setView('drafts');
+})();
 </script>
 </body>
 </html>
