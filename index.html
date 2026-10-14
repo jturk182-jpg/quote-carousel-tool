@@ -612,7 +612,7 @@ function loadData(d) {
   set('edSketch', d.sketch || 'none');
   set('edReframe', d.reframe || '');
   set('edCtaPunch', d.ctaPunch || '');
-  set('edCtaAction', d.ctaAction || 'Take the quiz → Lose Yourself');
+  set('edCtaAction', d.ctaAction ?? 'Take the quiz → Lose Yourself');
   updatePreview();
 }
 
@@ -745,10 +745,15 @@ function footHTML(showBrand, series, number) {
 function edAttr(id, edit) { return edit ? ` data-ed="${id}"` : ''; }
 function slot(id, cls, label, edit) { return edit ? `<div class="${cls} ed-empty" data-ed="${id}">+ ${label}</div>` : ''; }
 
-// A body slide left empty is dropped from the carousel and the rest renumber.
+// A body or CTA slide left empty is dropped from the carousel and the rest renumber.
 // The preview still shows it, faded, so it can be filled back in.
+function slideText(def, s) {
+  if (def.type === 'quote') return 'always';
+  if (def.type === 'cta') return (s.ctaPunch || '') + (s.ctaAction || '');
+  return s[def.key] || '';
+}
 function activeSlides(s) {
-  return SLIDE_DEFS.map((d, i) => i).filter(i => !SLIDE_DEFS[i].key || (s[SLIDE_DEFS[i].key] || '').trim());
+  return SLIDE_DEFS.map((d, i) => i).filter(i => slideText(SLIDE_DEFS[i], s).trim());
 }
 
 function buildSlideHTML(idx, s, edit) {
