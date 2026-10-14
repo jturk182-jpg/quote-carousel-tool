@@ -112,6 +112,7 @@ body { font-family: 'Space Mono', monospace; background: var(--bg-dark); color: 
 
 /* header: counter only, no brand, no frame */
 .slide-top { display: flex; justify-content: flex-end; align-items: center; flex-shrink: 0; min-height: 1em; }
+.slide-wrapper.skipped { opacity: 0.35; }
 .slide-counter { font-family: 'Space Mono', monospace; font-size: 0.4em; letter-spacing: 0.12em; color: var(--cream-muted); }
 
 .slide-body { flex: 1; display: flex; flex-direction: column; justify-content: center; }
@@ -744,10 +745,18 @@ function footHTML(showBrand, series, number) {
 function edAttr(id, edit) { return edit ? ` data-ed="${id}"` : ''; }
 function slot(id, cls, label, edit) { return edit ? `<div class="${cls} ed-empty" data-ed="${id}">+ ${label}</div>` : ''; }
 
+// A body slide left empty is dropped from the carousel and the rest renumber.
+// The preview still shows it, faded, so it can be filled back in.
+function activeSlides(s) {
+  return SLIDE_DEFS.map((d, i) => i).filter(i => !SLIDE_DEFS[i].key || (s[SLIDE_DEFS[i].key] || '').trim());
+}
+
 function buildSlideHTML(idx, s, edit) {
   const def = SLIDE_DEFS[idx];
-  const total = SLIDE_DEFS.length;
-  const counter = idx === 0 ? '' : `<div class="slide-counter">${idx + 1} / ${total}</div>`;
+  const active = activeSlides(s);
+  const pos = active.indexOf(idx);
+  const skipped = pos === -1;
+  const counter = idx === 0 ? '' : `<div class="slide-counter">${skipped ? 'skipped' : `${pos + 1} / ${active.length}`}</div>`;
   const isQuote = def.type === 'quote';
   const isCta = def.type === 'cta';
 
@@ -787,7 +796,7 @@ function buildSlideHTML(idx, s, edit) {
   const foot = isQuote ? '' : footHTML(isCta, s.series, s.number);
 
   const photo = (isQuote && s.photo) ? `<div class="photo-top" style="background-image:url('${s.photo}');background-position:50% ${Number(s.photoPos) || 0}%;"></div><div class="photo-fade"></div>${s.photoCredit ? `<div class="photo-credit">${esc(s.photoCredit)}</div>` : ''}` : '';
-  return `<div class="slide-wrapper" data-slide="${idx}">
+  return `<div class="slide-wrapper${skipped ? ' skipped' : ''}" data-slide="${idx}">
     <div class="slide${photo ? ' has-photo' : ''}${photo && ((s.quote || '').length + (s.tension || '').length > 150) ? ' photo-short' : ''}">
       ${photo}
       <div class="slide-content">
@@ -844,8 +853,10 @@ async function exportAll() {
   const blobs = [];
   const slug = (s.series || 'quote').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') + (s.number ? '-' + s.number : '') + '-annotated';
   await document.fonts.ready;
-  for (let i = 0; i < SLIDE_DEFS.length; i++) {
-    statusEl.innerHTML = `<span class="spinner"></span> Rendering slide ${i + 1} of ${SLIDE_DEFS.length}...`;
+  const active = activeSlides(s);
+  for (let n = 0; n < active.length; n++) {
+    const i = active[n];
+    statusEl.innerHTML = `<span class="spinner"></span> Rendering slide ${n + 1} of ${active.length}...`;
     renderContainer.innerHTML = buildSlideHTML(i, s);
     const wrapper = renderContainer.querySelector('.slide-wrapper');
     wrapper.style.cssText = 'width:1080px;height:1350px;aspect-ratio:auto;border-radius:0;overflow:hidden;position:relative;box-shadow:none;cursor:default;';
@@ -854,9 +865,9 @@ async function exportAll() {
     try {
       const canvas = await html2canvas(wrapper, { width: 1080, height: 1350, scale: 1, useCORS: true, backgroundColor: '#1b1814', logging: false, allowTaint: true });
       const blob = await new Promise(res => canvas.toBlob(res, 'image/png'));
-      blobs.push({ blob, filename: `${slug}-${String(i + 1).padStart(2, '0')}-${names[i]}.png` });
+      blobs.push({ blob, filename: `${slug}-${String(n + 1).padStart(2, '0')}-${names[i]}.png` });
     } catch (e) {
-      statusEl.textContent = 'Export error on slide ' + (i + 1) + ': ' + e.message;
+      statusEl.textContent = 'Export error on slide ' + (n + 1) + ': ' + e.message;
       statusEl.className = 'status-msg error'; renderContainer.innerHTML = ''; return;
     }
   }
